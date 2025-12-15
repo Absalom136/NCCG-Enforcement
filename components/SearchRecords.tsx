@@ -9,17 +9,23 @@ interface SearchRecordsProps {
   onEdit: (record: EnforcementRecord) => void;
   onBulkUpdate: (ids: string[], updates: Partial<EnforcementRecord>) => void;
   onViewRecord: (record: EnforcementRecord) => void;
+  initialFilter?: string;
 }
 
 const ITEMS_PER_PAGE = 5;
 
-const SearchRecords: React.FC<SearchRecordsProps> = ({ records, onEdit, onBulkUpdate, onViewRecord }) => {
+const SearchRecords: React.FC<SearchRecordsProps> = ({ records, onEdit, onBulkUpdate, onViewRecord, initialFilter = 'All' }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('All');
+  const [filterStatus, setFilterStatus] = useState<string>(initialFilter);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [summarizingIds, setSummarizingIds] = useState<Set<string>>(new Set());
   const [showReportModal, setShowReportModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+
+  // Sync initialFilter prop with local state when it changes (e.g., navigation from Dashboard)
+  useEffect(() => {
+    setFilterStatus(initialFilter);
+  }, [initialFilter]);
 
   const filteredRecords = records.filter(record => {
     const matchesSearch = 

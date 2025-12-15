@@ -6,9 +6,10 @@ import { FileText, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 interface DashboardProps {
   records: EnforcementRecord[];
   onViewRecord: (record: EnforcementRecord) => void;
+  onFilterSelect: (filter: string) => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ records, onViewRecord }) => {
+const Dashboard: React.FC<DashboardProps> = ({ records, onViewRecord, onFilterSelect }) => {
   const totalNotices = records.length;
   const pending = records.filter(r => r.status === 'Open' || r.status === 'Pending Review').length;
   const closed = records.filter(r => r.status === 'Closed').length;
@@ -31,13 +32,16 @@ const Dashboard: React.FC<DashboardProps> = ({ records, onViewRecord }) => {
 
   const COLORS = ['#FBBF24', '#60A5FA', '#34D399'];
 
-  const StatCard = ({ title, value, icon: Icon, colorClass }: any) => (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex items-start justify-between">
+  const StatCard = ({ title, value, icon: Icon, colorClass, onClick }: any) => (
+    <div 
+      onClick={onClick}
+      className={`bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex items-start justify-between cursor-pointer transition-all hover:shadow-md hover:scale-[1.02] active:scale-[0.98] group`}
+    >
       <div>
-        <p className="text-gray-500 text-sm font-medium uppercase tracking-wide">{title}</p>
+        <p className="text-gray-500 text-sm font-medium uppercase tracking-wide group-hover:text-gray-700 transition-colors">{title}</p>
         <h3 className="text-3xl font-bold mt-2 text-gray-800">{value}</h3>
       </div>
-      <div className={`p-3 rounded-lg ${colorClass}`}>
+      <div className={`p-3 rounded-lg transition-transform group-hover:rotate-12 ${colorClass}`}>
         <Icon size={24} className="text-white" />
       </div>
     </div>
@@ -52,10 +56,34 @@ const Dashboard: React.FC<DashboardProps> = ({ records, onViewRecord }) => {
 
       {/* Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Total Notices" value={totalNotices} icon={FileText} colorClass="bg-blue-600" />
-        <StatCard title="Pending Actions" value={pending} icon={Clock} colorClass="bg-yellow-500" />
-        <StatCard title="Resolved Cases" value={closed} icon={CheckCircle} colorClass="bg-green-500" />
-        <StatCard title="Urgent Alerts" value="2" icon={AlertTriangle} colorClass="bg-red-500" />
+        <StatCard 
+          title="Total Notices" 
+          value={totalNotices} 
+          icon={FileText} 
+          colorClass="bg-blue-600" 
+          onClick={() => onFilterSelect('All')}
+        />
+        <StatCard 
+          title="Pending Actions" 
+          value={pending} 
+          icon={Clock} 
+          colorClass="bg-yellow-500" 
+          onClick={() => onFilterSelect('Pending Review')}
+        />
+        <StatCard 
+          title="Resolved Cases" 
+          value={closed} 
+          icon={CheckCircle} 
+          colorClass="bg-green-500" 
+          onClick={() => onFilterSelect('Closed')}
+        />
+        <StatCard 
+          title="Urgent Alerts" 
+          value="2" 
+          icon={AlertTriangle} 
+          colorClass="bg-red-500" 
+          onClick={() => onFilterSelect('Open')}
+        />
       </div>
 
       {/* Charts Row */}

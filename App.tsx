@@ -13,6 +13,7 @@ const App: React.FC = () => {
   const [records, setRecords] = useState<EnforcementRecord[]>(MOCK_RECORDS);
   const [editingRecord, setEditingRecord] = useState<EnforcementRecord | null>(null);
   const [viewingRecord, setViewingRecord] = useState<EnforcementRecord | null>(null);
+  const [initialSearchFilter, setInitialSearchFilter] = useState<string>('All');
 
   const handleSaveRecord = (newRecord: EnforcementRecord) => {
     setRecords((prev) => {
@@ -61,10 +62,21 @@ const App: React.FC = () => {
     setCurrentView(AppView.DASHBOARD);
   };
 
+  const handleDashboardFilter = (filter: string) => {
+    setInitialSearchFilter(filter);
+    setCurrentView(AppView.SEARCH);
+  };
+
   const renderContent = () => {
     switch (currentView) {
       case AppView.DASHBOARD:
-        return <Dashboard records={records} onViewRecord={handleViewRecord} />;
+        return (
+          <Dashboard 
+            records={records} 
+            onViewRecord={handleViewRecord} 
+            onFilterSelect={handleDashboardFilter}
+          />
+        );
       case AppView.SEARCH:
         return (
           <SearchRecords 
@@ -72,6 +84,7 @@ const App: React.FC = () => {
             onEdit={handleEditRequest} 
             onBulkUpdate={handleBulkUpdate}
             onViewRecord={handleViewRecord}
+            initialFilter={initialSearchFilter}
           />
         );
       case AppView.NEW_ENTRY:
@@ -85,7 +98,7 @@ const App: React.FC = () => {
       case AppView.ADMIN_STRUCTURE:
         return <AdminHierarchy />;
       default:
-        return <Dashboard records={records} onViewRecord={handleViewRecord} />;
+        return <Dashboard records={records} onViewRecord={handleViewRecord} onFilterSelect={handleDashboardFilter} />;
     }
   };
 
