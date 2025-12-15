@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Save, X, Sparkles, UploadCloud, Map, FileText, Trash2 } from 'lucide-react';
+import { Save, X, Sparkles, UploadCloud, Map, FileText, Trash2, Camera } from 'lucide-react';
 import { EnforcementRecord, Attachment, SubCounty } from '../types';
 import { NAIROBI_ADMIN_STRUCTURE } from '../constants';
 import { generateRecommendations } from '../services/geminiService';
@@ -32,6 +32,7 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
   const [availableWards, setAvailableWards] = useState<string[]>([]);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (initialData) {
@@ -299,21 +300,43 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
             <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4">Evidence</h3>
             
             <div className="space-y-4">
-                {/* Upload Box */}
-                <div 
-                    onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center text-gray-400 hover:border-blue-500 hover:text-blue-500 transition-colors cursor-pointer bg-gray-50"
-                >
-                    <UploadCloud size={32} className="mb-2" />
-                    <p className="text-sm">Click to upload site photos or documents</p>
-                    <input 
-                        type="file" 
-                        className="hidden" 
-                        ref={fileInputRef}
-                        onChange={handleFileChange}
-                        multiple
-                        accept="image/*,.pdf,.doc,.docx"
-                    />
+                {/* Action Buttons */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Upload File Button */}
+                    <div 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center text-gray-400 hover:border-blue-500 hover:text-blue-500 hover:bg-blue-50 transition-all cursor-pointer bg-gray-50 h-32"
+                    >
+                        <UploadCloud size={24} className="mb-2" />
+                        <p className="text-sm font-medium">Upload Files</p>
+                        <span className="text-xs mt-1">Images, PDF, Docs</span>
+                        <input 
+                            type="file" 
+                            className="hidden" 
+                            ref={fileInputRef}
+                            onChange={handleFileChange}
+                            multiple
+                            accept="image/*,.pdf,.doc,.docx"
+                        />
+                    </div>
+
+                    {/* Take Photo Button */}
+                    <div 
+                        onClick={() => cameraInputRef.current?.click()}
+                        className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center text-gray-400 hover:border-yellow-500 hover:text-yellow-600 hover:bg-yellow-50 transition-all cursor-pointer bg-gray-50 h-32"
+                    >
+                        <Camera size={24} className="mb-2" />
+                        <p className="text-sm font-medium">Take Photo</p>
+                        <span className="text-xs mt-1">Use Camera</span>
+                        <input 
+                            type="file" 
+                            className="hidden" 
+                            ref={cameraInputRef}
+                            onChange={handleFileChange}
+                            accept="image/jpeg"
+                            capture="environment"
+                        />
+                    </div>
                 </div>
 
                 {/* File List */}

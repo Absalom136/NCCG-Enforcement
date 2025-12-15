@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Search, MapPin, Calendar, FileWarning, Edit, AlertCircle, CheckSquare, Square, UserPlus, CheckCircle, XCircle, Download, Sparkles, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, MapPin, Calendar, FileWarning, Edit, AlertCircle, CheckSquare, Square, UserPlus, CheckCircle, XCircle, Download, Sparkles, Loader2, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import { EnforcementRecord } from '../types';
 import { generateRecordSummary } from '../services/geminiService';
+import ReportGeneratorModal from './ReportGeneratorModal';
 
 interface SearchRecordsProps {
   records: EnforcementRecord[];
@@ -10,11 +11,15 @@ interface SearchRecordsProps {
   onViewRecord: (record: EnforcementRecord) => void;
 }
 
+const ITEMS_PER_PAGE = 5;
+
 const SearchRecords: React.FC<SearchRecordsProps> = ({ records, onEdit, onBulkUpdate, onViewRecord }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('All');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [summarizingIds, setSummarizingIds] = useState<Set<string>>(new Set());
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const filteredRecords = records.filter(record => {
     const matchesSearch = 
@@ -26,6 +31,16 @@ const SearchRecords: React.FC<SearchRecordsProps> = ({ records, onEdit, onBulkUp
 
     return matchesSearch && matchesStatus;
   });
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterStatus]);
+
+  // Pagination Logic
+  const totalPages = Math.ceil(filteredRecords.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const currentRecords = filteredRecords.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
   const toggleSelection = (id: string) => {
     const newSelected = new Set(selectedIds);
@@ -139,18 +154,27 @@ const SearchRecords: React.FC<SearchRecordsProps> = ({ records, onEdit, onBulkUp
           <h2 className="text-2xl font-bold text-gray-800">Search Records</h2>
           <p className="text-gray-500 mt-1">Retrieve history by Plot Number or Notice Number.</p>
         </div>
-        <button
-          onClick={handleExportCSV}
-          disabled={filteredRecords.length === 0}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-            filteredRecords.length === 0 
-              ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-              : 'bg-green-600 text-white hover:bg-green-700 shadow-sm'
-          }`}
-        >
-          <Download size={16} />
-          <span>Export CSV</span>
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setShowReportModal(true)}
+            className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 shadow-sm"
+          >
+            <FileText size={16} className="text-red-500" />
+            <span>PDF Report</span>
+          </button>
+          <button
+            onClick={handleExportCSV}
+            disabled={filteredRecords.length === 0}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              filteredRecords.length === 0 
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                : 'bg-green-600 text-white hover:bg-green-700 shadow-sm'
+            }`}
+          >
+            <Download size={16} />
+            <span>Export CSV</span>
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
@@ -190,8 +214,8 @@ const SearchRecords: React.FC<SearchRecordsProps> = ({ records, onEdit, onBulkUp
       </div>
 
       <div className="space-y-4">
-        {filteredRecords.length > 0 ? (
-          filteredRecords.map((record) => {
+        {currentRecords.length > 0 ? (
+          currentRecords.map((record) => {
             const isSelected = selectedIds.has(record.id);
             const isSummarizing = summarizingIds.has(record.id);
 
@@ -343,9 +367,40 @@ const SearchRecords: React.FC<SearchRecordsProps> = ({ records, onEdit, onBulkUp
         )}
       </div>
 
+      {/* Pagination Controls */}
+      {filteredRecords.length > ITEMS_PER_PAGE && (
+        <div className="flex justify-center items-center space-x-4 mt-6 pt-4 border-t border-gray-100">
+          <button
+            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+            className={`p-2 rounded-lg border transition-colors ${
+              currentPage === 1 
+                ? 'border-gray-200 text-gray-300 cursor-not-allowed' 
+                : 'border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            }`}
+          >
+            <ChevronLeft size={20} />
+          </button>
+          <span className="text-sm text-gray-600 font-medium">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            disabled={currentPage === totalPages}
+            className={`p-2 rounded-lg border transition-colors ${
+              currentPage === totalPages 
+                ? 'border-gray-200 text-gray-300 cursor-not-allowed' 
+                : 'border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            }`}
+          >
+            <ChevronRight size={20} />
+          </button>
+        </div>
+      )}
+
       {/* Floating Bulk Action Bar */}
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-4 rounded-full shadow-2xl z-50 flex items-center space-x-6 min-w-[320px] max-w-[90vw] justify-between">
+        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-4 rounded-full shadow-2xl z-50 flex items-center space-x-6 min-w-[320px] max-w-[90vw] justify-between animate-in slide-in-from-bottom-5">
           <div className="flex items-center space-x-2">
             <span className="bg-yellow-400 text-black text-xs font-bold px-2 py-0.5 rounded-full">{selectedIds.size}</span>
             <span className="font-medium text-sm">Selected</span>
@@ -378,6 +433,14 @@ const SearchRecords: React.FC<SearchRecordsProps> = ({ records, onEdit, onBulkUp
             </button>
           </div>
         </div>
+      )}
+
+      {/* Report Generator Modal */}
+      {showReportModal && (
+        <ReportGeneratorModal 
+            records={records} 
+            onClose={() => setShowReportModal(false)} 
+        />
       )}
     </div>
   );
