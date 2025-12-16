@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Save, X, Sparkles, UploadCloud, Map, FileText, Trash2, Camera } from 'lucide-react';
+import { Save, X, Sparkles, UploadCloud, Map, FileText, Trash2, Camera as CameraIcon } from 'lucide-react';
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Capacitor } from '@capacitor/core';
 import { EnforcementRecord, Attachment, SubCounty } from '../types';
 import { NAIROBI_ADMIN_STRUCTURE } from '../constants';
 import { generateRecommendations } from '../services/geminiService';
@@ -40,7 +42,6 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
   const [availableWards, setAvailableWards] = useState<string[]>([]);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (initialData) {
@@ -91,6 +92,37 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
     );
     setFormData(prev => ({ ...prev, recommendations: recs }));
     setIsGenerating(false);
+  };
+
+  const handleTakePhoto = async () => {
+    try {
+      const image = await Camera.getPhoto({
+        quality: 70,
+        allowEditing: false,
+        resultType: CameraResultType.DataUrl,
+        source: CameraSource.Camera
+      });
+
+      if (image.dataUrl) {
+        setFormData(prev => ({
+          ...prev,
+          attachments: [
+            ...(prev.attachments || []),
+            {
+              name: `Photo_${new Date().getTime()}.jpg`,
+              type: 'image/jpeg',
+              data: image.dataUrl!
+            }
+          ]
+        }));
+      }
+    } catch (error) {
+      console.error('Camera error:', error);
+      // Fallback for web testing or if permission denied
+      if (!Capacitor.isNativePlatform()) {
+         alert("Camera is primarily for mobile devices. Please use 'Upload Files' on web.");
+      }
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -342,20 +374,12 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
 
                     {/* Take Photo Button */}
                     <div 
-                        onClick={() => cameraInputRef.current?.click()}
+                        onClick={handleTakePhoto}
                         className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center text-gray-400 hover:border-yellow-500 hover:text-yellow-600 hover:bg-yellow-50 transition-all cursor-pointer bg-gray-50 h-32"
                     >
-                        <Camera size={24} className="mb-2" />
+                        <CameraIcon size={24} className="mb-2" />
                         <p className="text-sm font-medium">Take Photo</p>
-                        <span className="text-xs mt-1">Use Camera</span>
-                        <input 
-                            type="file" 
-                            className="hidden" 
-                            ref={cameraInputRef}
-                            onChange={handleFileChange}
-                            accept="image/jpeg"
-                            capture="environment"
-                        />
+                        <span className="text-xs mt-1">Open Camera</span>
                     </div>
                 </div>
 

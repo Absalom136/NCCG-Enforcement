@@ -1,5 +1,8 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
+import { Capacitor } from '@capacitor/core';
 import { EnforcementRecord } from '../types';
 
 const formatDate = (dateStr: string) => {
@@ -32,7 +35,7 @@ const formatDateForTitle = (dateStr: string) => {
     return `${day}${suffix} ${month} ${year}`;
 };
 
-export const generateWeeklyReport = (
+export const generateWeeklyReport = async (
   records: EnforcementRecord[],
   startDate: string,
   endDate: string,
@@ -136,7 +139,33 @@ export const generateWeeklyReport = (
       });
   }
 
-  // Save
   const fileName = `${subCounty.replace(/\s+/g, '_')}_Weekly_Report_${startDate}_${endDate}.pdf`;
-  doc.save(fileName);
+
+  if (Capacitor.isNativePlatform()) {
+    try {
+        const base64PDF = doc.output('datauristring').split(',')[1];
+        
+        // Write file to documents
+        const savedFile = await Filesystem.writeFile({
+            path: fileName,
+            data: base64PDF,
+            directory: Directory.Cache, // Use Cache for temporary sharing
+        });
+
+        // Share the file
+        await Share.share({
+            title: 'Weekly Enforcement Report',
+            text: `Weekly report for ${subCounty}`,
+            url: savedFile.uri,
+            dialogTitle: 'Export Report'
+        });
+        
+    } catch (e) {
+        console.error("Native export failed", e);
+        alert("Failed to export PDF on device. Please check permissions.");
+    }
+  } else {
+    // Browser fallback
+    doc.save(fileName);
+  }
 };

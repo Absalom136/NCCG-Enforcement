@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Search, MapPin, Calendar, FileWarning, Edit, AlertCircle, CheckSquare, Square, UserPlus, CheckCircle, XCircle, Download, Sparkles, Loader2, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
+import { Capacitor } from '@capacitor/core';
 import { EnforcementRecord } from '../types';
 import { generateRecordSummary } from '../services/geminiService';
 import ReportGeneratorModal from './ReportGeneratorModal';
@@ -84,7 +87,7 @@ const SearchRecords: React.FC<SearchRecordsProps> = ({ records, onEdit, onBulkUp
     }
   };
 
-  const handleExportCSV = () => {
+  const handleExportCSV = async () => {
     if (filteredRecords.length === 0) return;
 
     const headers = [
@@ -120,17 +123,40 @@ const SearchRecords: React.FC<SearchRecordsProps> = ({ records, onEdit, onBulkUp
     });
 
     const csvContent = [headers.join(','), ...csvRows].join('\n');
-    // Add BOM for Excel compatibility with UTF-8
-    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    
-    link.setAttribute('href', url);
-    link.setAttribute('download', `enforcement_records_${new Date().toISOString().slice(0, 10)}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const fileName = `enforcement_records_${new Date().toISOString().slice(0, 10)}.csv`;
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const savedFile = await Filesystem.writeFile({
+          path: fileName,
+          data: csvContent,
+          directory: Directory.Cache,
+          encoding: Encoding.UTF8
+        });
+
+        await Share.share({
+            title: 'Export CSV',
+            url: savedFile.uri,
+            dialogTitle: 'Share CSV Export'
+        });
+      } catch (e) {
+        console.error('Error saving CSV', e);
+        alert('Failed to save or share CSV on device.');
+      }
+    } else {
+        // Browser fallback
+        // Add BOM for Excel compatibility with UTF-8
+        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        
+        link.setAttribute('href', url);
+        link.setAttribute('download', fileName);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
   };
 
   const handleGenerateSummary = async (record: EnforcementRecord) => {

@@ -11,8 +11,8 @@ export const generateRecommendations = async (
   plotNumber: string
 ): Promise<string> => {
   if (!API_KEY) {
-    console.warn("Gemini API Key is missing.");
-    return "AI Recommendations unavailable (Missing API Key). Please enter manually.";
+    console.warn("Gemini API Key is missing. Ensure process.env.API_KEY is available during build.");
+    return "AI Recommendations unavailable (Missing API Key). Please check application settings.";
   }
 
   try {
