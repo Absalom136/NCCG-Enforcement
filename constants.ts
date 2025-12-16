@@ -56,7 +56,7 @@ export const NAIROBI_ADMIN_STRUCTURE: AdministrativeUnit[] = [
   },
   {
     borough: "Northern",
-    manager: "Northern Boru/John Saruni",
+    manager: "John Saruni",
     subCounties: [
       {
         name: "Roysambu",
@@ -86,7 +86,7 @@ export const NAIROBI_ADMIN_STRUCTURE: AdministrativeUnit[] = [
   },
   {
     borough: "Eastern",
-    manager: "Borough George Muca",
+    manager: "George Muca",
     subCounties: [
       {
         name: "Embakasi Central",

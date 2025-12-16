@@ -34,7 +34,7 @@ const App: React.FC = () => {
           ...record,
           ...updates,
           auditLog: [
-            ...record.auditLog,
+            ...(record.auditLog || []),
             {
               timestamp: new Date().toISOString().replace('T', ' ').substring(0, 16),
               action: 'Bulk Update',

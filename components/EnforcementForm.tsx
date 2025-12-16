@@ -11,13 +11,21 @@ interface EnforcementFormProps {
 }
 
 const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, onCancel }) => {
+  // Use local date YYYY-MM-DD
+  const getLocalDate = () => {
+    const d = new Date();
+    const offset = d.getTimezoneOffset();
+    const local = new Date(d.getTime() - (offset*60*1000));
+    return local.toISOString().split('T')[0];
+  };
+
   const [formData, setFormData] = useState<Partial<EnforcementRecord>>({
     plotNumber: '',
     noticeNumber: `NCC-ENF-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000)}`,
     location: '',
     subCounty: '',
     ward: '',
-    dateIssued: new Date().toISOString().split('T')[0],
+    dateIssued: getLocalDate(),
     issueOfConcern: '',
     processTaken: 'Notice Issued',
     recommendations: '',
@@ -106,6 +114,8 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
         };
         reader.readAsDataURL(file);
       });
+      // Reset input to allow re-selection of same file
+      e.target.value = '';
     }
   };
 
@@ -124,7 +134,7 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
       ...formData as EnforcementRecord,
       id: initialData ? initialData.id : `REC-${Date.now()}`,
       auditLog: initialData 
-        ? [...initialData.auditLog, { timestamp, action: "Updated Record", user: "Admin User" }]
+        ? [...(initialData.auditLog || []), { timestamp, action: "Updated Record", user: "Admin User" }]
         : [{ timestamp, action: "Created Record", user: "Current Officer" }]
     };
     onSave(newRecord);
@@ -148,8 +158,9 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Borough</label>
+              <label htmlFor="borough" className="block text-sm font-medium text-gray-700 mb-1">Borough</label>
               <select 
+                id="borough"
                 value={selectedBorough} 
                 onChange={handleBoroughChange}
                 className="w-full p-2.5 bg-white border border-gray-300 rounded-md focus:ring-2 focus:ring-yellow-400 outline-none"
@@ -160,8 +171,9 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Sub-County</label>
+              <label htmlFor="subCounty" className="block text-sm font-medium text-gray-700 mb-1">Sub-County</label>
               <select 
+                id="subCounty"
                 value={formData.subCounty} 
                 onChange={handleSubCountyChange}
                 className="w-full p-2.5 bg-white border border-gray-300 rounded-md focus:ring-2 focus:ring-yellow-400 outline-none"
@@ -173,8 +185,9 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Ward</label>
+              <label htmlFor="ward" className="block text-sm font-medium text-gray-700 mb-1">Ward</label>
               <select 
+                id="ward"
                 value={formData.ward} 
                 onChange={(e) => setFormData({...formData, ward: e.target.value})}
                 className="w-full p-2.5 bg-white border border-gray-300 rounded-md focus:ring-2 focus:ring-yellow-400 outline-none"
@@ -186,8 +199,9 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Plot Number</label>
+              <label htmlFor="plotNumber" className="block text-sm font-medium text-gray-700 mb-1">Plot Number</label>
               <input 
+                id="plotNumber"
                 type="text" 
                 value={formData.plotNumber} 
                 onChange={(e) => setFormData({...formData, plotNumber: e.target.value})}
@@ -197,8 +211,9 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
               />
             </div>
             <div className="lg:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Street / Road / Landmark</label>
+              <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">Street / Road / Landmark</label>
               <input 
+                id="location"
                 type="text" 
                 value={formData.location} 
                 onChange={(e) => setFormData({...formData, location: e.target.value})}
@@ -224,8 +239,9 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Date Issued</label>
+              <label htmlFor="dateIssued" className="block text-sm font-medium text-gray-700 mb-1">Date Issued</label>
               <input 
+                id="dateIssued"
                 type="date" 
                 value={formData.dateIssued} 
                 onChange={(e) => setFormData({...formData, dateIssued: e.target.value})}
@@ -234,10 +250,11 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Process Taken</label>
+              <label htmlFor="processTaken" className="block text-sm font-medium text-gray-700 mb-1">Process Taken</label>
               <select 
+                id="processTaken"
                 value={formData.processTaken} 
-                onChange={(e) => setFormData({...formData, processTaken: e.target.value as any})}
+                onChange={(e) => setFormData({...formData, processTaken: e.target.value as EnforcementRecord['processTaken']})}
                 className="w-full p-2.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-yellow-400 outline-none"
               >
                 <option value="Notice Issued">Notice Issued</option>
@@ -248,8 +265,9 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
               </select>
             </div>
              <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Officer In Charge</label>
+              <label htmlFor="officerInCharge" className="block text-sm font-medium text-gray-700 mb-1">Officer In Charge</label>
               <input 
+                id="officerInCharge"
                 type="text" 
                 value={formData.officerInCharge} 
                 onChange={(e) => setFormData({...formData, officerInCharge: e.target.value})}
@@ -262,8 +280,9 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
           <div className="space-y-4">
              <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide">Observations</h3>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Issue of Concern</label>
+              <label htmlFor="issueOfConcern" className="block text-sm font-medium text-gray-700 mb-1">Issue of Concern</label>
               <textarea 
+                id="issueOfConcern"
                 value={formData.issueOfConcern} 
                 onChange={(e) => setFormData({...formData, issueOfConcern: e.target.value})}
                 className="w-full p-2.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-yellow-400 outline-none h-24"
@@ -273,7 +292,7 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
             </div>
             <div>
               <div className="flex justify-between items-center mb-1">
-                <label className="block text-sm font-medium text-gray-700">Recommendations</label>
+                <label htmlFor="recommendations" className="block text-sm font-medium text-gray-700">Recommendations</label>
                 <button
                   type="button"
                   onClick={handleAiGenerate}
@@ -285,6 +304,7 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
                 </button>
               </div>
               <textarea 
+                id="recommendations"
                 value={formData.recommendations} 
                 onChange={(e) => setFormData({...formData, recommendations: e.target.value})}
                 className="w-full p-2.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-yellow-400 outline-none h-32 font-mono text-sm"

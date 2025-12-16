@@ -21,6 +21,7 @@ const Dashboard: React.FC<DashboardProps> = ({ records, onViewRecord, onFilterSe
   ];
 
   const subCountyData = records.reduce((acc, curr) => {
+    if (!curr.subCounty) return acc;
     const found = acc.find(item => item.name === curr.subCounty);
     if (found) {
       found.count += 1;
