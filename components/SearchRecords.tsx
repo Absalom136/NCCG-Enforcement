@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, MapPin, Calendar, FileWarning, Edit, AlertCircle, CheckSquare, Square, UserPlus, CheckCircle, XCircle, Download, Sparkles, Loader2, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
@@ -24,6 +24,8 @@ const SearchRecords: React.FC<SearchRecordsProps> = ({ records, onEdit, onBulkUp
   const [summarizingIds, setSummarizingIds] = useState<Set<string>>(new Set());
   const [showReportModal, setShowReportModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  
+  const listTopRef = useRef<HTMLDivElement>(null);
 
   // Sync initialFilter prop with local state when it changes (e.g., navigation from Dashboard)
   useEffect(() => {
@@ -45,6 +47,13 @@ const SearchRecords: React.FC<SearchRecordsProps> = ({ records, onEdit, onBulkUp
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, filterStatus]);
+  
+  // Scroll to top when page changes
+  useEffect(() => {
+    if (currentPage > 1 && listTopRef.current) {
+        listTopRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [currentPage]);
 
   // Pagination Logic
   const totalPages = Math.ceil(filteredRecords.length / ITEMS_PER_PAGE);
@@ -182,7 +191,7 @@ const SearchRecords: React.FC<SearchRecordsProps> = ({ records, onEdit, onBulkUp
 
   return (
     <div className="space-y-6 relative pb-20">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4" ref={listTopRef}>
         <div>
           <h2 className="text-2xl font-bold text-gray-800">Search Records</h2>
           <p className="text-gray-500 mt-1">Retrieve history by Plot Number or Notice Number.</p>
@@ -402,32 +411,38 @@ const SearchRecords: React.FC<SearchRecordsProps> = ({ records, onEdit, onBulkUp
 
       {/* Pagination Controls */}
       {filteredRecords.length > ITEMS_PER_PAGE && (
-        <div className="flex justify-center items-center space-x-4 mt-6 pt-4 border-t border-gray-100">
-          <button
-            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-            disabled={currentPage === 1}
-            className={`p-2 rounded-lg border transition-colors ${
-              currentPage === 1 
-                ? 'border-gray-200 text-gray-300 cursor-not-allowed' 
-                : 'border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-            }`}
-          >
-            <ChevronLeft size={20} />
-          </button>
-          <span className="text-sm text-gray-600 font-medium">
-            Page {currentPage} of {totalPages}
+        <div className="flex flex-col sm:flex-row justify-between items-center mt-6 pt-4 border-t border-gray-100 gap-4">
+          <span className="text-sm text-gray-500 order-2 sm:order-1">
+            Showing <span className="font-medium text-gray-900">{startIndex + 1}</span> to <span className="font-medium text-gray-900">{Math.min(startIndex + ITEMS_PER_PAGE, filteredRecords.length)}</span> of <span className="font-medium text-gray-900">{filteredRecords.length}</span> results
           </span>
-          <button
-            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-            disabled={currentPage === totalPages}
-            className={`p-2 rounded-lg border transition-colors ${
-              currentPage === totalPages 
-                ? 'border-gray-200 text-gray-300 cursor-not-allowed' 
-                : 'border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-            }`}
-          >
-            <ChevronRight size={20} />
-          </button>
+
+          <div className="flex items-center space-x-2 order-1 sm:order-2">
+            <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className={`p-2 rounded-lg border transition-colors ${
+                currentPage === 1 
+                    ? 'border-gray-200 text-gray-300 cursor-not-allowed' 
+                    : 'border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
+            >
+                <ChevronLeft size={20} />
+            </button>
+            <span className="text-sm text-gray-600 font-medium px-2">
+                Page {currentPage} of {totalPages}
+            </span>
+            <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className={`p-2 rounded-lg border transition-colors ${
+                currentPage === totalPages 
+                    ? 'border-gray-200 text-gray-300 cursor-not-allowed' 
+                    : 'border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
+            >
+                <ChevronRight size={20} />
+            </button>
+          </div>
         </div>
       )}
 
