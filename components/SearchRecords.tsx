@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, MapPin, Calendar, FileWarning, Edit, AlertCircle, CheckSquare, Square, UserPlus, CheckCircle, XCircle, Download, Sparkles, Loader2, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, MapPin, Calendar, FileWarning, Edit, AlertCircle, CheckSquare, Square, UserPlus, CheckCircle, XCircle, Download, Sparkles, Loader2, FileText, ChevronLeft, ChevronRight, ClipboardList, Plus } from 'lucide-react';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { Capacitor } from '@capacitor/core';
@@ -12,13 +12,23 @@ interface SearchRecordsProps {
   onEdit: (record: EnforcementRecord) => void;
   onBulkUpdate: (ids: string[], updates: Partial<EnforcementRecord>) => void;
   onViewRecord: (record: EnforcementRecord) => void;
+  onAddNew: () => void;
   initialFilter?: string;
+  dashboardSearchTerm?: string;
 }
 
 const ITEMS_PER_PAGE = 5;
 
-const SearchRecords: React.FC<SearchRecordsProps> = ({ records, onEdit, onBulkUpdate, onViewRecord, initialFilter = 'All' }) => {
-  const [searchTerm, setSearchTerm] = useState('');
+const SearchRecords: React.FC<SearchRecordsProps> = ({ 
+  records, 
+  onEdit, 
+  onBulkUpdate, 
+  onViewRecord, 
+  onAddNew,
+  initialFilter = 'All',
+  dashboardSearchTerm = ''
+}) => {
+  const [searchTerm, setSearchTerm] = useState(dashboardSearchTerm);
   const [filterStatus, setFilterStatus] = useState<string>(initialFilter);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [summarizingIds, setSummarizingIds] = useState<Set<string>>(new Set());
@@ -27,10 +37,16 @@ const SearchRecords: React.FC<SearchRecordsProps> = ({ records, onEdit, onBulkUp
   
   const listTopRef = useRef<HTMLDivElement>(null);
 
-  // Sync initialFilter prop with local state when it changes (e.g., navigation from Dashboard)
+  // Sync initial props with local state when they change
   useEffect(() => {
     setFilterStatus(initialFilter);
   }, [initialFilter]);
+
+  useEffect(() => {
+    if (dashboardSearchTerm) {
+      setSearchTerm(dashboardSearchTerm);
+    }
+  }, [dashboardSearchTerm]);
 
   const filteredRecords = records.filter(record => {
     const matchesSearch = 
@@ -114,383 +130,338 @@ const SearchRecords: React.FC<SearchRecordsProps> = ({ records, onEdit, onBulkUp
       'AI Summary'
     ];
 
-    const csvRows = filteredRecords.map(record => {
-      return [
-        record.noticeNumber,
-        record.plotNumber,
-        `"${record.location}"`,
-        record.subCounty,
-        record.ward,
-        record.dateIssued,
-        record.status,
-        record.processTaken,
-        `"${record.issueOfConcern.replace(/"/g, '""')}"`, // Escape quotes
-        `"${record.recommendations.replace(/"/g, '""')}"`,
-        `"${record.officerInCharge}"`,
-        `"${(record.aiSummary || '').replace(/"/g, '""')}"`
-      ].join(',');
-    });
+    const rows = filteredRecords.map(r => [
+      r.noticeNumber,
+      r.plotNumber,
+      r.location,
+      r.subCounty,
+      r.ward,
+      r.dateIssued,
+      r.status,
+      r.processTaken,
+      r.issueOfConcern.replace(/,/g, ';'),
+      r.recommendations.replace(/,/g, ';'),
+      r.officerInCharge,
+      (r.aiSummary || '').replace(/,/g, ';')
+    ]);
 
-    const csvContent = [headers.join(','), ...csvRows].join('\n');
-    const fileName = `enforcement_records_${new Date().toISOString().slice(0, 10)}.csv`;
+    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+    const fileName = `NCC_Enforcement_Records_${new Date().toISOString().split('T')[0]}.csv`;
 
     if (Capacitor.isNativePlatform()) {
       try {
-        const savedFile = await Filesystem.writeFile({
+        const result = await Filesystem.writeFile({
           path: fileName,
           data: csvContent,
-          directory: Directory.Cache,
-          encoding: Encoding.UTF8
+          directory: Directory.Documents,
+          encoding: Encoding.UTF8,
         });
-
         await Share.share({
-            title: 'Export CSV',
-            url: savedFile.uri,
-            dialogTitle: 'Share CSV Export'
+          title: 'Export Records',
+          text: 'Enforcement records export',
+          url: result.uri,
+          dialogTitle: 'Share CSV'
         });
       } catch (e) {
-        console.error('Error saving CSV', e);
-        alert('Failed to save or share CSV on device.');
+        console.error("Export failed", e);
+        alert("Native export failed.");
       }
     } else {
-        // Browser fallback
-        // Add BOM for Excel compatibility with UTF-8
-        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        
-        link.setAttribute('href', url);
-        link.setAttribute('download', fileName);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", fileName);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
   };
 
-  const handleGenerateSummary = async (record: EnforcementRecord) => {
-    const newSummarizing = new Set(summarizingIds);
-    newSummarizing.add(record.id);
-    setSummarizingIds(newSummarizing);
-
+  const handleSummarize = async (record: EnforcementRecord) => {
+    if (summarizingIds.has(record.id)) return;
+    
+    setSummarizingIds(prev => new Set(prev).add(record.id));
     try {
-        const result: AiResult = await generateRecordSummary(
-            record.issueOfConcern,
-            record.recommendations,
-            record.location
-        );
-        // FIX: Extract result.text string to avoid "Minified React Error #31"
-        onBulkUpdate([record.id], { aiSummary: result.text });
-    } catch (err) {
-        console.error("Failed to generate summary", err);
+      const result = await generateRecordSummary(record.issueOfConcern, record.recommendations, record.location);
+      onBulkUpdate([record.id], { aiSummary: result.text });
+    } catch (error) {
+      console.error("Summary failed", error);
     } finally {
-        setSummarizingIds(prev => {
-            const next = new Set(prev);
-            next.delete(record.id);
-            return next;
-        });
+      setSummarizingIds(prev => {
+        const next = new Set(prev);
+        next.delete(record.id);
+        return next;
+      });
     }
   };
 
   return (
-    <div className="space-y-6 relative pb-20">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4" ref={listTopRef}>
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800">Search Records</h2>
-          <p className="text-gray-500 mt-1">Retrieve history by Plot Number or Notice Number.</p>
+    <div className="space-y-6" ref={listTopRef}>
+      {/* Search and Filters Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+          <input
+            type="text"
+            placeholder="Search by plot, notice or location..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none"
+          />
         </div>
-        <div className="flex gap-3">
+        <div className="flex items-center space-x-2 overflow-x-auto pb-2 md:pb-0">
+          {['All', 'Open', 'Pending Review', 'Closed'].map(status => (
+            <button
+              key={status}
+              onClick={() => setFilterStatus(status)}
+              className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider transition-colors whitespace-nowrap ${
+                filterStatus === status
+                  ? 'bg-gray-900 text-white'
+                  : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              {status}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Bulk Actions & Tools */}
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={toggleSelectAll}
+            className="flex items-center space-x-2 text-sm text-gray-600 hover:text-gray-900"
+          >
+            {selectedIds.size === filteredRecords.length && filteredRecords.length > 0 ? <CheckSquare size={18} /> : <Square size={18} />}
+            <span>Select All</span>
+          </button>
+          {selectedIds.size > 0 && (
+            <div className="flex items-center space-x-2 border-l pl-3 ml-3 border-gray-200">
+              <span className="text-xs font-bold text-indigo-600">{selectedIds.size} Selected</span>
+              <button
+                onClick={() => handleBulkAction('close')}
+                className="p-1.5 text-green-600 hover:bg-green-50 rounded"
+                title="Mark Closed"
+              >
+                <CheckCircle size={18} />
+              </button>
+              <button
+                onClick={() => handleBulkAction('assign')}
+                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"
+                title="Assign Officer"
+              >
+                <UserPlus size={18} />
+              </button>
+            </div>
+          )}
+        </div>
+        <div className="flex items-center space-x-2">
           <button
             onClick={() => setShowReportModal(true)}
-            className="flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 shadow-sm"
+            className="flex items-center space-x-2 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold hover:bg-blue-100 transition-colors"
           >
-            <FileText size={16} className="text-red-500" />
-            <span>PDF Report</span>
+            <ClipboardList size={14} />
+            <span>Weekly Report</span>
           </button>
           <button
             onClick={handleExportCSV}
-            disabled={filteredRecords.length === 0}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              filteredRecords.length === 0 
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                : 'bg-green-600 text-white hover:bg-green-700 shadow-sm'
-            }`}
+            className="flex items-center space-x-2 px-3 py-1.5 bg-gray-50 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-100 transition-colors"
           >
-            <Download size={16} />
+            <Download size={14} />
             <span>Export CSV</span>
           </button>
-        </div>
-      </div>
-
-      <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
-        <div className="relative flex-1 w-full">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-          <input
-            type="text"
-            placeholder="Enter Plot No, Notice No, or Street Name..."
-            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 focus:border-transparent outline-none shadow-sm"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <div className="flex gap-2 w-full md:w-auto">
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none bg-white shadow-sm flex-1 md:flex-none"
-          >
-            <option value="All">All Status</option>
-            <option value="Open">Open</option>
-            <option value="Pending Review">Pending</option>
-            <option value="Closed">Closed</option>
-          </select>
-          
           <button
-            onClick={toggleSelectAll}
-            className="px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 flex items-center justify-center min-w-[120px]"
+            onClick={onAddNew}
+            className="flex items-center space-x-2 px-3 py-1.5 bg-yellow-400 text-black rounded-lg text-xs font-bold hover:bg-yellow-500 transition-colors shadow-sm"
           >
-            {selectedIds.size > 0 && selectedIds.size === filteredRecords.length ? (
-               <><CheckSquare size={18} className="mr-2 text-yellow-500" /> Deselect All</>
-            ) : (
-               <><Square size={18} className="mr-2 text-gray-400" /> Select All</>
-            )}
+            <Plus size={14} />
+            <span>New Record</span>
           </button>
         </div>
       </div>
 
+      {/* Results List */}
       <div className="space-y-4">
         {currentRecords.length > 0 ? (
-          currentRecords.map((record) => {
-            const isSelected = selectedIds.has(record.id);
-            const isSummarizing = summarizingIds.has(record.id);
-
-            return (
-              <div 
-                key={record.id} 
-                className={`bg-white rounded-xl shadow-sm border transition-all hover:shadow-md relative overflow-hidden ${
-                  isSelected ? 'border-yellow-400 ring-1 ring-yellow-400' : 'border-gray-200'
-                }`}
-              >
-                {/* Selection Overlay/Click Area */}
-                <div 
-                    className="absolute top-0 left-0 bottom-0 w-12 flex items-start justify-center pt-6 cursor-pointer z-10 hover:bg-gray-50"
-                    onClick={() => toggleSelection(record.id)}
+          currentRecords.map(record => (
+            <div
+              key={record.id}
+              className={`bg-white rounded-2xl border transition-all duration-200 shadow-sm ${
+                selectedIds.has(record.id) ? 'border-indigo-400 ring-1 ring-indigo-400' : 'border-gray-100'
+              }`}
+            >
+              <div className="p-5 flex items-start">
+                <button
+                  onClick={() => toggleSelection(record.id)}
+                  className={`mt-1 mr-4 ${selectedIds.has(record.id) ? 'text-indigo-600' : 'text-gray-300'}`}
                 >
-                    {isSelected ? (
-                        <CheckSquare className="text-yellow-500" size={20} />
-                    ) : (
-                        <Square className="text-gray-300" size={20} />
+                  {selectedIds.has(record.id) ? <CheckSquare size={20} /> : <Square size={20} />}
+                </button>
+                
+                <div className="flex-1 min-w-0 grid grid-cols-1 lg:grid-cols-4 gap-4">
+                  <div className="lg:col-span-2 cursor-pointer" onClick={() => onViewRecord(record)}>
+                    <div className="flex items-center space-x-2 mb-1">
+                      <span className="text-[10px] font-mono font-bold text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">
+                        {record.noticeNumber}
+                      </span>
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter ${
+                        record.status === 'Open' ? 'text-orange-600 bg-orange-100' : 
+                        record.status === 'Closed' ? 'text-green-600 bg-green-100' : 
+                        'text-blue-600 bg-blue-100'
+                      }`}>
+                        {record.status}
+                      </span>
+                    </div>
+                    <h3 className="text-lg font-black text-gray-900 truncate">Plot {record.plotNumber}</h3>
+                    <div className="flex items-center text-sm text-gray-500 mt-1">
+                      <MapPin size={14} className="mr-1 shrink-0" />
+                      <span className="truncate">{record.location}, {record.subCounty}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col justify-center space-y-1">
+                    <div className="flex items-center text-xs text-gray-500">
+                      <Calendar size={12} className="mr-1.5" />
+                      {record.dateIssued}
+                    </div>
+                    <div className="flex items-center text-xs text-gray-500">
+                      <FileWarning size={12} className="mr-1.5" />
+                      {record.processTaken}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end space-x-2">
+                    {!record.aiSummary && (
+                      <button
+                        onClick={() => handleSummarize(record)}
+                        disabled={summarizingIds.has(record.id)}
+                        className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                        title="AI Summarize"
+                      >
+                        {summarizingIds.has(record.id) ? (
+                          <Loader2 size={18} className="animate-spin" />
+                        ) : (
+                          <Sparkles size={18} />
+                        )}
+                      </button>
                     )}
-                </div>
-
-                {/* Main Content Click Area */}
-                <div 
-                    className="pl-12 p-6 cursor-pointer"
-                    onClick={() => onViewRecord(record)}
-                >
-                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 pb-4 border-b border-gray-100">
-                    <div>
-                      <div className="flex items-center space-x-3 mb-1">
-                        <h3 className="text-lg font-bold text-gray-900">{record.plotNumber}</h3>
-                        <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs font-mono">{record.noticeNumber}</span>
-                      </div>
-                      <div className="flex items-center text-sm text-gray-500">
-                        <MapPin size={14} className="mr-1" />
-                        {record.location}, {record.subCounty}
-                      </div>
-                    </div>
-                    <div className="mt-2 md:mt-0 flex items-center space-x-3">
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                          record.status === 'Open' ? 'bg-red-100 text-red-700 border border-red-200' :
-                          record.status === 'Closed' ? 'bg-green-100 text-green-700 border border-green-200' :
-                          'bg-blue-100 text-blue-700 border border-blue-200'
-                        }`}>
-                          {record.status}
-                        </span>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); onEdit(record); }}
-                          className="flex items-center space-x-1 text-gray-600 hover:text-blue-600 bg-gray-50 hover:bg-blue-50 px-3 py-1.5 rounded-md transition-colors border border-gray-200 z-20 relative"
-                        >
-                          <Edit size={14} />
-                          <span className="text-sm font-medium">Edit</span>
-                        </button>
-                    </div>
+                    <button
+                      onClick={() => onEdit(record)}
+                      className="p-2 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                      title="Edit"
+                    >
+                      <Edit size={18} />
+                    </button>
+                    <button
+                      onClick={() => onViewRecord(record)}
+                      className="p-2 text-gray-400 hover:text-[#00875a] hover:bg-green-50 rounded-lg transition-colors"
+                      title="View Details"
+                    >
+                      <FileText size={18} />
+                    </button>
                   </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                    <div>
-                      <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Details</h4>
-                      <div className="space-y-2">
-                        <div className="flex items-start">
-                            <Calendar size={16} className="text-gray-400 mt-0.5 mr-2" />
-                            <span className="text-sm text-gray-700">Issued: {record.dateIssued}</span>
-                        </div>
-                        <div className="flex items-start">
-                            <FileWarning size={16} className="text-gray-400 mt-0.5 mr-2" />
-                            <span className="text-sm text-gray-700">{record.issueOfConcern}</span>
-                        </div>
-                      </div>
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Recommendation</h4>
-                      <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-100 h-full">
-                        <p className="text-sm text-gray-700 italic">"{record.recommendations}"</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* AI Summary Section */}
-                  <div className="mt-4 pt-3 border-t border-gray-100">
-                     <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-xs font-semibold text-indigo-600 uppercase tracking-wider flex items-center">
-                            <Sparkles size={14} className="mr-1.5" /> Executive Summary
-                        </h4>
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                handleGenerateSummary(record);
-                            }}
-                            disabled={isSummarizing}
-                            className={`text-xs px-2.5 py-1.5 rounded-md font-medium transition-all flex items-center border disabled:opacity-50 ${
-                                record.aiSummary 
-                                    ? 'bg-white text-gray-500 border-gray-200 hover:text-indigo-600 hover:border-indigo-200' 
-                                    : 'bg-indigo-50 text-indigo-600 border-indigo-100 hover:bg-indigo-100 hover:border-indigo-200'
-                            }`}
-                        >
-                            {isSummarizing ? (
-                                <><Loader2 size={12} className="mr-1.5 animate-spin" /> {record.aiSummary ? 'Regenerating...' : 'Generating...'}</>
-                            ) : (
-                                <>{record.aiSummary ? 'Regenerate' : 'Generate Summary'}</>
-                            )}
-                        </button>
-                     </div>
-                     
-                     {record.aiSummary && typeof record.aiSummary === 'string' && (
-                         <div className="bg-indigo-50/50 border border-indigo-100 p-3 rounded-lg text-sm text-gray-800 leading-relaxed shadow-sm">
-                             {record.aiSummary}
-                         </div>
-                     )}
-                  </div>
-
-
-                  {record.attachments && record.attachments.length > 0 && (
-                    <div className="mt-4 pt-3 border-t border-gray-100">
-                        <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Evidence</h4>
-                        <div className="flex gap-2 overflow-x-auto pb-2">
-                            {record.attachments.map((att, idx) => (
-                                <div key={idx} className="flex-shrink-0 w-24 border border-gray-200 rounded-lg p-1 bg-white" title={att.name}>
-                                    {att.type.startsWith('image/') ? (
-                                        <img src={att.data} alt={att.name} className="h-16 w-full object-cover rounded-md" />
-                                    ) : (
-                                         <div className="h-16 w-full flex items-center justify-center bg-gray-50 rounded-md">
-                                            <span className="text-xs text-gray-500 font-medium">DOC</span>
-                                        </div>
-                                    )}
-                                     <p className="text-[10px] text-gray-500 truncate mt-1 text-center">{att.name}</p>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                  )}
-
-                  {record.auditLog.length > 0 && (
-                    <div className="mt-4 pt-3 border-t border-gray-100 text-xs text-gray-400 flex items-center">
-                        <AlertCircle size={12} className="mr-1" />
-                        Last update by {record.auditLog[record.auditLog.length - 1].user} on {record.auditLog[record.auditLog.length - 1].timestamp}
-                    </div>
-                  )}
                 </div>
               </div>
-            );
-          })
+              
+              {record.aiSummary && (
+                <div className="px-5 pb-4 pt-0">
+                  <div className="bg-indigo-50 rounded-xl p-3 flex items-start space-x-2 border border-indigo-100/50">
+                    <Sparkles size={14} className="text-indigo-600 mt-0.5 shrink-0" />
+                    <p className="text-xs text-indigo-800 leading-relaxed font-medium">
+                      {record.aiSummary}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))
         ) : (
-          <div className="text-center py-12 bg-white rounded-xl border border-dashed border-gray-300">
-            <Search size={48} className="mx-auto text-gray-300 mb-3" />
-            <h3 className="text-lg font-medium text-gray-900">No records found</h3>
-            <p className="text-gray-500">Try adjusting your search terms.</p>
+          <div className="bg-white rounded-3xl p-12 text-center border-2 border-dashed border-gray-200">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-gray-50 text-gray-400 rounded-full mb-4">
+              <Search size={32} />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900">No records found</h3>
+            <p className="text-gray-500 mt-1">Try adjusting your search or filters.</p>
+            <button
+              onClick={() => { setSearchTerm(''); setFilterStatus('All'); }}
+              className="mt-6 text-[#00875a] font-bold text-sm uppercase tracking-wider"
+            >
+              Clear All Filters
+            </button>
           </div>
         )}
       </div>
 
-      {/* Pagination Controls */}
-      {filteredRecords.length > ITEMS_PER_PAGE && (
-        <div className="flex flex-col sm:flex-row justify-between items-center mt-6 pt-4 border-t border-gray-100 gap-4">
-          <span className="text-sm text-gray-500 order-2 sm:order-1">
-            Showing <span className="font-medium text-gray-900">{startIndex + 1}</span> to <span className="font-medium text-gray-900">{Math.min(startIndex + ITEMS_PER_PAGE, filteredRecords.length)}</span> of <span className="font-medium text-gray-900">{filteredRecords.length}</span> results
-          </span>
-
-          <div className="flex items-center space-x-2 order-1 sm:order-2">
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between bg-white px-4 py-3 rounded-xl border border-gray-100 shadow-sm">
+          <div className="flex-1 flex justify-between sm:hidden">
             <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className={`p-2 rounded-lg border transition-colors ${
-                currentPage === 1 
-                    ? 'border-gray-200 text-gray-300 cursor-not-allowed' 
-                    : 'border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                }`}
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
             >
-                <ChevronLeft size={20} />
+              Previous
             </button>
-            <span className="text-sm text-gray-600 font-medium px-2">
-                Page {currentPage} of {totalPages}
-            </span>
             <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className={`p-2 rounded-lg border transition-colors ${
-                currentPage === totalPages 
-                    ? 'border-gray-200 text-gray-300 cursor-not-allowed' 
-                    : 'border-gray-300 text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                }`}
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
             >
-                <ChevronRight size={20} />
+              Next
             </button>
+          </div>
+          <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm text-gray-700">
+                Showing <span className="font-medium">{startIndex + 1}</span> to <span className="font-medium">{Math.min(startIndex + ITEMS_PER_PAGE, filteredRecords.length)}</span> of{' '}
+                <span className="font-medium">{filteredRecords.length}</span> results
+              </p>
+            </div>
+            <div>
+              <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  <span className="sr-only">Previous</span>
+                  <ChevronLeft size={20} />
+                </button>
+                {[...Array(totalPages)].map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentPage(i + 1)}
+                    className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                      currentPage === i + 1
+                        ? 'z-10 bg-yellow-400 border-yellow-400 text-black'
+                        : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  <span className="sr-only">Next</span>
+                  <ChevronRight size={20} />
+                </button>
+              </nav>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Floating Bulk Action Bar */}
-      {selectedIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-4 rounded-full shadow-2xl z-50 flex items-center space-x-6 min-w-[320px] max-w-[90vw] justify-between animate-in slide-in-from-bottom-5">
-          <div className="flex items-center space-x-2">
-            <span className="bg-yellow-400 text-black text-xs font-bold px-2 py-0.5 rounded-full">{selectedIds.size}</span>
-            <span className="font-medium text-sm">Selected</span>
-          </div>
-          <div className="flex items-center space-x-3">
-             <button 
-              onClick={() => handleBulkAction('close')}
-              className="flex items-center space-x-1 hover:text-green-400 transition-colors"
-              title="Mark as Closed"
-            >
-              <CheckCircle size={18} />
-              <span className="text-sm font-medium hidden sm:inline">Close</span>
-            </button>
-            <div className="h-4 w-px bg-gray-700"></div>
-            <button 
-              onClick={() => handleBulkAction('assign')}
-              className="flex items-center space-x-1 hover:text-blue-400 transition-colors"
-              title="Assign Officer"
-            >
-              <UserPlus size={18} />
-              <span className="text-sm font-medium hidden sm:inline">Assign</span>
-            </button>
-            <div className="h-4 w-px bg-gray-700"></div>
-            <button 
-              onClick={() => setSelectedIds(new Set())}
-              className="hover:text-red-400 transition-colors"
-              title="Clear Selection"
-            >
-              <XCircle size={20} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Report Generator Modal */}
       {showReportModal && (
-        <ReportGeneratorModal 
-            records={records} 
-            onClose={() => setShowReportModal(false)} 
+        <ReportGeneratorModal
+          records={records}
+          onClose={() => setShowReportModal(false)}
         />
       )}
     </div>

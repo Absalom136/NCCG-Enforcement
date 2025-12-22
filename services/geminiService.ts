@@ -17,22 +17,20 @@ export const generateRecommendations = async (
   subCounty: string,
   plotNumber: string
 ): Promise<AiResult> => {
-  // Always fetch fresh from process.env to get the latest key from aistudio.openSelectKey()
-  const apiKey = process.env.API_KEY || '';
-  
-  if (!apiKey) {
+  // Always verify process.env.API_KEY is available
+  if (!process.env.API_KEY) {
     console.error("AI ERROR: Gemini API Key is missing.");
     return { text: "AI Recommendations unavailable: Please connect your AI Key using the button in the sidebar." };
   }
 
   try {
-    // Create new instance to ensure up-to-date key context
-    const ai = new GoogleGenAI({ apiKey });
+    // Create new instance right before making the call to ensure up-to-date key context.
+    // GUIDELINE: Use `new GoogleGenAI({ apiKey: process.env.API_KEY })` directly.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     /**
      * Using gemini-3-flash-preview for search grounding.
      * Guidelines show this model supports the googleSearch tool for text tasks.
-     * Pro models often have stricter billing/permission requirements in some regions.
      */
     const modelName = 'gemini-3-flash-preview';
 
@@ -110,14 +108,13 @@ export const generateRecordSummary = async (
   recommendations: string,
   location: string
 ): Promise<AiResult> => {
-  const apiKey = process.env.API_KEY || '';
-  
-  if (!apiKey) {
+  if (!process.env.API_KEY) {
     return { text: "Summary error: Configuration missing." };
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey });
+    // GUIDELINE: Use `new GoogleGenAI({ apiKey: process.env.API_KEY })` directly.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const modelName = 'gemini-3-flash-preview';
 
     const prompt = `
@@ -138,6 +135,7 @@ export const generateRecordSummary = async (
       contents: prompt,
     });
 
+    // GUIDELINE: Use .text property, not .text() method.
     return { text: response.text?.trim() || "Summary generation failed." };
   } catch (error: any) {
     console.error("AI SUMMARY ERROR:", error);

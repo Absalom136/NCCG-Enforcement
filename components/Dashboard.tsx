@@ -1,183 +1,166 @@
-import React from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import React, { useState } from 'react';
 import { EnforcementRecord } from '../types';
-import { FileText, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
+import { FileText, AlertTriangle, CheckCircle, Search, Info, ArrowRight } from 'lucide-react';
 
 interface DashboardProps {
   records: EnforcementRecord[];
   onViewRecord: (record: EnforcementRecord) => void;
-  onFilterSelect: (filter: string) => void;
+  onFilterSelect: (filter: string, searchTerm?: string) => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ records, onViewRecord, onFilterSelect }) => {
+  const [localSearch, setLocalSearch] = useState('');
+  
   const totalNotices = records.length;
   const pending = records.filter(r => r.status === 'Open' || r.status === 'Pending Review').length;
   const closed = records.filter(r => r.status === 'Closed').length;
 
-  const data = [
-    { name: 'Open', value: records.filter(r => r.status === 'Open').length },
-    { name: 'Pending', value: records.filter(r => r.status === 'Pending Review').length },
-    { name: 'Closed', value: closed },
-  ];
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onFilterSelect('All', localSearch);
+  };
 
-  const subCountyData = records.reduce((acc, curr) => {
-    if (!curr.subCounty) return acc;
-    const found = acc.find(item => item.name === curr.subCounty);
-    if (found) {
-      found.count += 1;
-    } else {
-      acc.push({ name: curr.subCounty, count: 1 });
-    }
-    return acc;
-  }, [] as { name: string; count: number }[]);
-
-  const COLORS = ['#FBBF24', '#60A5FA', '#34D399'];
-
-  const StatCard = ({ title, value, icon: Icon, colorClass, onClick }: any) => (
+  const StatTile = ({ title, value, icon: Icon, bgColor, textColor, onClick }: any) => (
     <div 
       onClick={onClick}
-      className={`bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex items-start justify-between cursor-pointer transition-all hover:shadow-md hover:scale-[1.02] active:scale-[0.98] group`}
+      className="bg-white rounded-2xl p-4 flex flex-col items-center justify-center shadow-sm border border-gray-100 min-w-[100px] flex-1 active:bg-gray-50 transition-colors"
     >
-      <div>
-        <p className="text-gray-500 text-sm font-medium uppercase tracking-wide group-hover:text-gray-700 transition-colors">{title}</p>
-        <h3 className="text-3xl font-bold mt-2 text-gray-800">{value}</h3>
+      <div className={`p-2 rounded-xl ${bgColor} ${textColor} mb-2`}>
+        <Icon size={24} />
       </div>
-      <div className={`p-3 rounded-lg transition-transform group-hover:rotate-12 ${colorClass}`}>
-        <Icon size={24} className="text-white" />
-      </div>
+      <span className="text-2xl font-black text-gray-900">{value}</span>
+      <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider text-center">{title}</span>
     </div>
   );
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-800">Enforcement Dashboard</h2>
-        <p className="text-gray-500 mt-1">Overview of enforcement activities across Nairobi City County.</p>
+    <div className="flex flex-col min-h-screen bg-white pb-10">
+      {/* Hero Section */}
+      <div className="bg-[#00875a] p-8 pb-20 relative">
+        <div className="flex justify-between items-start mb-8">
+           <div className="text-white">
+              <p className="text-xs font-bold uppercase tracking-[0.2em] opacity-80 mb-1">Nairobi City County</p>
+              <h1 className="text-3xl font-black tracking-tight">Enforcement Portal</h1>
+           </div>
+           <button className="text-white opacity-80 hover:opacity-100 bg-white/10 p-2 rounded-full backdrop-blur-sm">
+             <Info size={22} />
+           </button>
+        </div>
+
+        {/* Search Overlay - Fixed and Styled as per reference */}
+        <div className="absolute left-6 right-6 -bottom-10 z-10">
+          <form onSubmit={handleSearchSubmit} className="relative group">
+            <Search 
+              className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#00875a] transition-colors" 
+              size={22} 
+            />
+            <input 
+              type="text" 
+              value={localSearch}
+              onChange={(e) => setLocalSearch(e.target.value)}
+              placeholder="Search plot number, notice..."
+              className="w-full bg-white rounded-[2rem] py-6 pl-14 pr-6 shadow-2xl text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-yellow-400/30 transition-all border border-gray-100 text-lg"
+            />
+            {localSearch && (
+               <button 
+                type="submit"
+                className="absolute right-4 top-1/2 -translate-y-1/2 bg-[#00875a] text-white p-2 rounded-full shadow-lg"
+               >
+                 <ArrowRight size={20} />
+               </button>
+            )}
+          </form>
+        </div>
       </div>
 
-      {/* Stats Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard 
-          title="Total Notices" 
-          value={totalNotices} 
-          icon={FileText} 
-          colorClass="bg-blue-600" 
-          onClick={() => onFilterSelect('All')}
-        />
-        <StatCard 
-          title="Pending Actions" 
-          value={pending} 
-          icon={Clock} 
-          colorClass="bg-yellow-500" 
-          onClick={() => onFilterSelect('Pending Review')}
-        />
-        <StatCard 
-          title="Resolved Cases" 
-          value={closed} 
-          icon={CheckCircle} 
-          colorClass="bg-green-500" 
-          onClick={() => onFilterSelect('Closed')}
-        />
-        <StatCard 
-          title="Urgent Alerts" 
-          value="2" 
-          icon={AlertTriangle} 
-          colorClass="bg-red-500" 
-          onClick={() => onFilterSelect('Open')}
-        />
-      </div>
+      {/* Content Body */}
+      <div className="mt-16 px-6 space-y-10">
+        {/* Quick Stats Grid */}
+        <div className="flex gap-4 overflow-x-auto pb-4 pt-2 scrollbar-hide">
+          <StatTile 
+            title="Total" 
+            value={totalNotices} 
+            icon={FileText} 
+            bgColor="bg-green-50" 
+            textColor="text-green-600"
+            onClick={() => onFilterSelect('All')}
+          />
+          <StatTile 
+            title="Pending" 
+            value={pending} 
+            icon={AlertTriangle} 
+            bgColor="bg-orange-50" 
+            textColor="text-orange-500"
+            onClick={() => onFilterSelect('Pending Review')}
+          />
+          <StatTile 
+            title="Closed" 
+            value={closed} 
+            icon={CheckCircle} 
+            bgColor="bg-blue-50" 
+            textColor="text-blue-600"
+            onClick={() => onFilterSelect('Closed')}
+          />
+        </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <h3 className="text-lg font-semibold mb-4 text-gray-800">Status Distribution</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={data}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {data.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+        {/* Recent Section */}
+        <section>
+          <div className="flex justify-between items-center mb-5">
+            <h3 className="text-xl font-black text-gray-900 tracking-tight">Recent Notices</h3>
+            <button 
+              onClick={() => onFilterSelect('All')}
+              className="text-[#00875a] text-sm font-black uppercase tracking-wider flex items-center"
+            >
+              See All <ArrowRight size={14} className="ml-1" />
+            </button>
           </div>
-          <div className="flex justify-center space-x-6 text-sm">
-            {data.map((entry, index) => (
-              <div key={entry.name} className="flex items-center">
-                <span className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: COLORS[index] }}></span>
-                {entry.name}: {entry.value}
+          
+          <div className="space-y-4">
+            {records.slice(0, 3).map((record) => (
+              <div 
+                key={record.id}
+                onClick={() => onViewRecord(record)}
+                className="bg-gray-50 rounded-3xl p-5 flex items-center border border-gray-100 active:bg-gray-100 active:scale-[0.98] transition-all cursor-pointer shadow-sm"
+              >
+                <div className="w-14 h-14 bg-white rounded-2xl border border-gray-100 flex items-center justify-center text-[#00875a] shrink-0 mr-4 shadow-sm">
+                   <FileText size={28} strokeWidth={2.5} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-black text-gray-900 truncate text-lg">Plot {record.plotNumber}</h4>
+                  <p className="text-sm text-gray-500 truncate font-medium">{record.location}</p>
+                </div>
+                <div className="text-right ml-2">
+                  <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest ${
+                    record.status === 'Open' ? 'text-orange-600 bg-orange-100' : 
+                    record.status === 'Closed' ? 'text-green-600 bg-green-100' : 
+                    'text-blue-600 bg-blue-100'
+                  }`}>
+                    {record.status}
+                  </span>
+                  <p className="text-[10px] text-gray-400 mt-2 font-black opacity-60 tracking-tighter">{record.dateIssued}</p>
+                </div>
               </div>
             ))}
           </div>
-        </div>
+        </section>
 
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <h3 className="text-lg font-semibold mb-4 text-gray-800">Enforcement by Sub-County</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={subCountyData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} />
-                <YAxis axisLine={false} tickLine={false} />
-                <Tooltip cursor={{ fill: '#F3F4F6' }} />
-                <Bar dataKey="count" fill="#1E293B" radius={[4, 4, 0, 0]} barSize={40} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Activity Mock */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-800">Recent Enforcement Actions</h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50 text-gray-500 font-medium">
-              <tr>
-                <th className="px-6 py-3">Notice No</th>
-                <th className="px-6 py-3">Plot No</th>
-                <th className="px-6 py-3">Location</th>
-                <th className="px-6 py-3">Status</th>
-                <th className="px-6 py-3">Date</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {records.slice(0, 5).map((record) => (
-                <tr 
-                  key={record.id} 
-                  className="hover:bg-gray-50 transition-colors cursor-pointer"
-                  onClick={() => onViewRecord(record)}
-                >
-                  <td className="px-6 py-4 font-medium text-blue-600">{record.noticeNumber}</td>
-                  <td className="px-6 py-4">{record.plotNumber}</td>
-                  <td className="px-6 py-4">{record.location}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                      record.status === 'Open' ? 'bg-yellow-100 text-yellow-800' :
-                      record.status === 'Closed' ? 'bg-green-100 text-green-800' :
-                      'bg-blue-100 text-blue-800'
-                    }`}>
-                      {record.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-gray-500">{record.dateIssued}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        {/* Compliance Card */}
+        <div className="bg-[#00875a] rounded-[2rem] p-6 text-white shadow-xl relative overflow-hidden group">
+           {/* Decorative elements */}
+           <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-white/10 rounded-full group-hover:scale-110 transition-transform duration-500"></div>
+           <div className="absolute bottom-0 left-0 -ml-10 -mb-10 w-40 h-40 bg-yellow-400/20 rounded-full"></div>
+           
+           <div className="relative z-10">
+              <div className="flex items-center space-x-3 mb-3">
+                 <div className="bg-yellow-400 p-2 rounded-xl text-gray-900 shadow-lg">
+                    <AlertTriangle size={20} />
+                 </div>
+                 <h4 className="font-black uppercase tracking-wider text-sm">Compliance Guideline</h4>
+              </div>
+              <p className="text-sm font-medium leading-relaxed opacity-90">
+                Always verify physical planning permits against the master register before issuing demolition warnings. Ensure AI recommendations are cross-checked with sub-county bylaws.
+              </p>
+           </div>
         </div>
       </div>
     </div>

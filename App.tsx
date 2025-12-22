@@ -14,6 +14,7 @@ const App: React.FC = () => {
   const [editingRecord, setEditingRecord] = useState<EnforcementRecord | null>(null);
   const [viewingRecord, setViewingRecord] = useState<EnforcementRecord | null>(null);
   const [initialSearchFilter, setInitialSearchFilter] = useState<string>('All');
+  const [dashboardSearchTerm, setDashboardSearchTerm] = useState<string>('');
   const [isAiConnected, setIsAiConnected] = useState(false);
 
   useEffect(() => {
@@ -91,8 +92,9 @@ const App: React.FC = () => {
     setCurrentView(AppView.DASHBOARD);
   };
 
-  const handleDashboardFilter = (filter: string) => {
+  const handleDashboardFilter = (filter: string, searchTerm: string = '') => {
     setInitialSearchFilter(filter);
+    setDashboardSearchTerm(searchTerm);
     setCurrentView(AppView.SEARCH);
   };
 
@@ -113,7 +115,9 @@ const App: React.FC = () => {
             onEdit={handleEditRequest} 
             onBulkUpdate={handleBulkUpdate}
             onViewRecord={handleViewRecord}
+            onAddNew={() => setCurrentView(AppView.NEW_ENTRY)}
             initialFilter={initialSearchFilter}
+            dashboardSearchTerm={dashboardSearchTerm}
           />
         );
       case AppView.NEW_ENTRY:
