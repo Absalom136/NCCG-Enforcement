@@ -4,7 +4,7 @@ import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { Capacitor } from '@capacitor/core';
 import { EnforcementRecord } from '../types';
-import { generateRecordSummary } from '../services/geminiService';
+import { generateRecordSummary, AiResult } from '../services/geminiService';
 import ReportGeneratorModal from './ReportGeneratorModal';
 
 interface SearchRecordsProps {
@@ -174,12 +174,15 @@ const SearchRecords: React.FC<SearchRecordsProps> = ({ records, onEdit, onBulkUp
     setSummarizingIds(newSummarizing);
 
     try {
-        const summary = await generateRecordSummary(
+        const result: AiResult = await generateRecordSummary(
             record.issueOfConcern,
             record.recommendations,
             record.location
         );
-        onBulkUpdate([record.id], { aiSummary: summary });
+        // FIX: Extract result.text string to avoid "Minified React Error #31"
+        onBulkUpdate([record.id], { aiSummary: result.text });
+    } catch (err) {
+        console.error("Failed to generate summary", err);
     } finally {
         setSummarizingIds(prev => {
             const next = new Set(prev);
@@ -362,7 +365,7 @@ const SearchRecords: React.FC<SearchRecordsProps> = ({ records, onEdit, onBulkUp
                         </button>
                      </div>
                      
-                     {record.aiSummary && (
+                     {record.aiSummary && typeof record.aiSummary === 'string' && (
                          <div className="bg-indigo-50/50 border border-indigo-100 p-3 rounded-lg text-sm text-gray-800 leading-relaxed shadow-sm">
                              {record.aiSummary}
                          </div>
