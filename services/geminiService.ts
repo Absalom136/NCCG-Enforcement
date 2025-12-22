@@ -10,26 +10,31 @@ export interface AiResult {
 
 /**
  * Generates enforcement recommendations based on a reported issue.
- * Uses gemini-3-pro-image-preview for real-time information via Google Search grounding.
+ * Uses gemini-3-flash-preview for real-time information via Google Search grounding.
  */
 export const generateRecommendations = async (
   issue: string,
   subCounty: string,
   plotNumber: string
 ): Promise<AiResult> => {
+  // Always fetch fresh from process.env to get the latest key from aistudio.openSelectKey()
   const apiKey = process.env.API_KEY || '';
   
   if (!apiKey) {
     console.error("AI ERROR: Gemini API Key is missing.");
-    return { text: "AI Recommendations unavailable: API Key selection required." };
+    return { text: "AI Recommendations unavailable: Please connect your AI Key using the button in the sidebar." };
   }
 
   try {
-    // Re-initialize per call to ensure latest key is used
+    // Create new instance to ensure up-to-date key context
     const ai = new GoogleGenAI({ apiKey });
     
-    // Using gemini-3-pro-image-preview for high-quality real-time info using googleSearch tool
-    const modelName = 'gemini-3-pro-image-preview';
+    /**
+     * Using gemini-3-flash-preview for search grounding.
+     * Guidelines show this model supports the googleSearch tool for text tasks.
+     * Pro models often have stricter billing/permission requirements in some regions.
+     */
+    const modelName = 'gemini-3-flash-preview';
 
     const prompt = `
       Act as a senior Enforcement Officer for the Nairobi City County Government.
@@ -61,7 +66,7 @@ export const generateRecommendations = async (
 
     // Extract grounding URLs as per requirements
     const sources: { uri: string; title: string }[] = [];
-    const chunks = (response as any).candidates?.[0]?.groundingMetadata?.groundingChunks;
+    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (chunks) {
         chunks.forEach((chunk: any) => {
             if (chunk.web) {
@@ -77,16 +82,23 @@ export const generateRecommendations = async (
   } catch (error: any) {
     console.error("AI RECOMMENDATION ERROR:", error);
     
-    // Per guidelines: if entity not found, re-prompt for key selection via UI state
+    // Specifically handle Permission Denied (403) for search grounding
+    if (error.message?.includes('403') || error.message?.includes('PERMISSION_DENIED')) {
+        return { 
+            text: "PERMISSION ERROR: Google Search grounding requires a Paid API Key. Please click the 'Enable AI Tools' button and select a key from a project with billing enabled (ai.google.dev/gemini-api/docs/billing)." 
+        };
+    }
+
+    // Per guidelines: if entity not found, re-prompt for key selection
     if (error.message?.includes('Requested entity was not found')) {
-      return { text: "AI Service disconnected. Please re-enable AI tools in the sidebar." };
+      return { text: "API Error: The selected model or key is invalid. Please re-enable AI tools in the sidebar." };
     }
 
     if (error.message?.includes('NetworkError') || error.message?.includes('Failed to fetch')) {
-        return { text: "Network Error: Please check your internet connection." };
+        return { text: "Network Error: Please check your mobile data connection." };
     }
     
-    return { text: "The AI assistant is temporarily unavailable. Error: " + (error.message || "Service Error") };
+    return { text: "AI Suggestion failed. Please enter recommendations manually or check your project permissions." };
   }
 };
 
@@ -127,7 +139,7 @@ export const generateRecordSummary = async (
     });
 
     return { text: response.text?.trim() || "Summary generation failed." };
-  } catch (error) {
+  } catch (error: any) {
     console.error("AI SUMMARY ERROR:", error);
     return { text: "Summary generation failed." };
   }
