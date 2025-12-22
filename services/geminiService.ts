@@ -1,69 +1,116 @@
 import { GoogleGenAI } from "@google/genai";
 
-const API_KEY = process.env.API_KEY || ''; 
+/**
+ * Interface for AI Response with potential grounding metadata
+ */
+export interface AiResult {
+  text: string;
+  sources?: { uri: string; title: string }[];
+}
 
-// We handle the case where API key might be missing gracefully in the UI
-// but for the service we assume it will be provided or we return a placeholder.
-
+/**
+ * Generates enforcement recommendations based on a reported issue.
+ * Uses gemini-3-pro-image-preview for real-time information via Google Search grounding.
+ */
 export const generateRecommendations = async (
   issue: string,
   subCounty: string,
   plotNumber: string
-): Promise<string> => {
-  if (!API_KEY) {
-    console.warn("Gemini API Key is missing. Ensure process.env.API_KEY is available during build.");
-    return "AI Recommendations unavailable (Missing API Key). Please check application settings.";
+): Promise<AiResult> => {
+  const apiKey = process.env.API_KEY || '';
+  
+  if (!apiKey) {
+    console.error("AI ERROR: Gemini API Key is missing.");
+    return { text: "AI Recommendations unavailable: API Key selection required." };
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey: API_KEY });
+    // Re-initialize per call to ensure latest key is used
+    const ai = new GoogleGenAI({ apiKey });
     
-    // We use a specific model suitable for text generation
-    const model = 'gemini-2.5-flash';
+    // Using gemini-3-pro-image-preview for high-quality real-time info using googleSearch tool
+    const modelName = 'gemini-3-pro-image-preview';
 
     const prompt = `
       Act as a senior Enforcement Officer for the Nairobi City County Government.
       
       Context:
-      A new enforcement notice is being drafted for Plot Number: ${plotNumber} in ${subCounty}.
+      A new enforcement notice is being drafted for Plot Number: ${plotNumber} in ${subCounty}, Nairobi.
       The reported issue of concern is: "${issue}".
       
       Task:
+      Use Google Search to find relevant Nairobi City County (NCC) urban planning laws or 
+      environmental regulations (e.g., Physical Planning Act, County Nuisance Laws).
+      
       Generate 3 concise, formal, and legally sound recommendations for the enforcement team.
-      The recommendations should align with urban planning and public nuisance laws.
       Return ONLY the list of recommendations as bullet points.
     `;
 
     const response = await ai.models.generateContent({
-      model: model,
+      model: modelName,
       contents: prompt,
+      config: {
+        tools: [{ googleSearch: {} }],
+        temperature: 0.7,
+      }
     });
 
-    return response.text || "No recommendations generated.";
-  } catch (error) {
-    console.error("Error generating recommendations:", error);
-    return "Error generating recommendations. Please check network or API key.";
+    if (!response || !response.text) {
+        throw new Error("Empty response from Gemini API");
+    }
+
+    // Extract grounding URLs as per requirements
+    const sources: { uri: string; title: string }[] = [];
+    const chunks = (response as any).candidates?.[0]?.groundingMetadata?.groundingChunks;
+    if (chunks) {
+        chunks.forEach((chunk: any) => {
+            if (chunk.web) {
+                sources.push({ uri: chunk.web.uri, title: chunk.web.title });
+            }
+        });
+    }
+
+    return { 
+        text: response.text.trim(),
+        sources: sources.length > 0 ? sources : undefined
+    };
+  } catch (error: any) {
+    console.error("AI RECOMMENDATION ERROR:", error);
+    
+    // Per guidelines: if entity not found, re-prompt for key selection via UI state
+    if (error.message?.includes('Requested entity was not found')) {
+      return { text: "AI Service disconnected. Please re-enable AI tools in the sidebar." };
+    }
+
+    if (error.message?.includes('NetworkError') || error.message?.includes('Failed to fetch')) {
+        return { text: "Network Error: Please check your internet connection." };
+    }
+    
+    return { text: "The AI assistant is temporarily unavailable. Error: " + (error.message || "Service Error") };
   }
 };
 
+/**
+ * Summarizes a full record into a single executive sentence.
+ */
 export const generateRecordSummary = async (
   issue: string,
   recommendations: string,
   location: string
-): Promise<string> => {
-  if (!API_KEY) {
-    return "AI Summary unavailable (Missing API Key).";
+): Promise<AiResult> => {
+  const apiKey = process.env.API_KEY || '';
+  
+  if (!apiKey) {
+    return { text: "Summary error: Configuration missing." };
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey: API_KEY });
-    const model = 'gemini-2.5-flash';
+    const ai = new GoogleGenAI({ apiKey });
+    const modelName = 'gemini-3-flash-preview';
 
     const prompt = `
       Act as an Executive Assistant to the Nairobi City County Governor.
-      
-      Task:
-      Summarize the following enforcement record into a single, concise, and professional sentence suitable for a high-level executive report.
+      Summarize the following enforcement record into a single, professional executive sentence.
       
       Details:
       Location: ${location}
@@ -75,13 +122,13 @@ export const generateRecordSummary = async (
     `;
 
     const response = await ai.models.generateContent({
-      model: model,
+      model: modelName,
       contents: prompt,
     });
 
-    return response.text || "Summary could not be generated.";
+    return { text: response.text?.trim() || "Summary generation failed." };
   } catch (error) {
-    console.error("Error generating summary:", error);
-    return "Error generating summary.";
+    console.error("AI SUMMARY ERROR:", error);
+    return { text: "Summary generation failed." };
   }
 };

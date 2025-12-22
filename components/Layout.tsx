@@ -1,14 +1,16 @@
 import React from 'react';
-import { LayoutDashboard, Search, PlusCircle, Users, Menu, X, ShieldAlert } from 'lucide-react';
+import { LayoutDashboard, Search, PlusCircle, Users, Menu, X, ShieldAlert, Zap, ZapOff } from 'lucide-react';
 import { AppView } from '../types';
 
 interface LayoutProps {
   currentView: AppView;
   setCurrentView: (view: AppView) => void;
+  isAiConnected: boolean;
+  onConnectAi: () => void;
   children: React.ReactNode;
 }
 
-const Layout: React.FC<LayoutProps> = ({ currentView, setCurrentView, children }) => {
+const Layout: React.FC<LayoutProps> = ({ currentView, setCurrentView, isAiConnected, onConnectAi, children }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   const NavItem = ({ view, label, icon: Icon }: { view: AppView; label: string; icon: any }) => (
@@ -47,6 +49,21 @@ const Layout: React.FC<LayoutProps> = ({ currentView, setCurrentView, children }
           <NavItem view={AppView.NEW_ENTRY} label="New Entry" icon={PlusCircle} />
           <NavItem view={AppView.ADMIN_STRUCTURE} label="Admin Hierarchy" icon={Users} />
         </nav>
+        
+        <div className="p-4 border-t border-gray-800">
+            <button 
+                onClick={onConnectAi}
+                className={`w-full flex items-center justify-center space-x-2 py-2.5 px-3 rounded-lg text-sm font-medium transition-all ${
+                    isAiConnected 
+                    ? 'bg-green-900/30 text-green-400 border border-green-800/50' 
+                    : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg'
+                }`}
+            >
+                {isAiConnected ? <Zap size={16} /> : <ZapOff size={16} />}
+                <span>{isAiConnected ? 'AI Active' : 'Enable AI Tools'}</span>
+            </button>
+        </div>
+
         <div className="p-4 border-t border-gray-800 text-xs text-gray-500">
           <p>© 2025 Nairobi City County</p>
           <p className="mt-1">v1.0.0 (Beta)</p>
@@ -61,9 +78,14 @@ const Layout: React.FC<LayoutProps> = ({ currentView, setCurrentView, children }
             </div>
           <span className="font-bold">NCC Enforcement</span>
         </div>
-        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
-          {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
+        <div className="flex items-center space-x-4">
+            <button onClick={onConnectAi} className={isAiConnected ? 'text-green-400' : 'text-indigo-400'}>
+                {isAiConnected ? <Zap size={20} /> : <ZapOff size={20} />}
+            </button>
+            <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
+                {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+        </div>
       </div>
 
       {/* Mobile Menu Overlay */}

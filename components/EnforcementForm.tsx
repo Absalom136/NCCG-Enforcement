@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Save, X, Sparkles, UploadCloud, Map, FileText, Trash2, Camera as CameraIcon } from 'lucide-react';
+import { Save, X, Sparkles, UploadCloud, Map, FileText, Trash2, Camera as CameraIcon, AlertCircle, ExternalLink } from 'lucide-react';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
 import { EnforcementRecord, Attachment, SubCounty } from '../types';
 import { NAIROBI_ADMIN_STRUCTURE } from '../constants';
-import { generateRecommendations } from '../services/geminiService';
+import { generateRecommendations, AiResult } from '../services/geminiService';
 
 interface EnforcementFormProps {
   initialData?: EnforcementRecord | null;
@@ -38,6 +38,8 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
 
   const [selectedBorough, setSelectedBorough] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiSources, setAiSources] = useState<{ uri: string; title: string }[]>([]);
   const [availableSubCounties, setAvailableSubCounties] = useState<SubCounty[]>([]);
   const [availableWards, setAvailableWards] = useState<string[]>([]);
   
@@ -46,7 +48,6 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
   useEffect(() => {
     if (initialData) {
       setFormData(initialData);
-      // Try to reverse lookup borough based on subcounty if editing
       const foundBorough = NAIROBI_ADMIN_STRUCTURE.find(b => 
         b.subCounties.some(sc => sc.name === initialData.subCounty)
       );
@@ -71,27 +72,38 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
     const scName = e.target.value;
     const sub = availableSubCounties.find(s => s.name === scName);
     setAvailableWards(sub ? sub.wards : []);
-    
-    // Auto-fill officer if possible (Mock behavior based on PDF structure)
-    const officer = sub ? sub.planningOfficer : ''; // Using planning officer as default enforcement lead
-    
+    const officer = sub ? sub.planningOfficer : ''; 
     setFormData(prev => ({ ...prev, subCounty: scName, ward: '', officerInCharge: officer }));
   };
 
   const handleAiGenerate = async () => {
     if (!formData.issueOfConcern || !formData.subCounty) {
-      alert("Please enter an Issue of Concern and select a Sub-County first.");
+      setAiError("Please enter an Issue of Concern and select a Sub-County first.");
       return;
     }
 
+    setAiError(null);
+    setAiSources([]);
     setIsGenerating(true);
-    const recs = await generateRecommendations(
-      formData.issueOfConcern,
-      formData.subCounty,
-      formData.plotNumber || 'Unknown Plot'
-    );
-    setFormData(prev => ({ ...prev, recommendations: recs }));
-    setIsGenerating(false);
+    
+    try {
+      const result: AiResult = await generateRecommendations(
+        formData.issueOfConcern,
+        formData.subCounty,
+        formData.plotNumber || 'Unknown Plot'
+      );
+      
+      if (result.text.toLowerCase().includes('error') || result.text.toLowerCase().includes('unavailable')) {
+        setAiError(result.text);
+      } else {
+        setFormData(prev => ({ ...prev, recommendations: result.text }));
+        if (result.sources) setAiSources(result.sources);
+      }
+    } catch (error) {
+      setAiError("Failed to connect to AI service. Check internet connection.");
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleTakePhoto = async () => {
@@ -118,7 +130,6 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
       }
     } catch (error) {
       console.error('Camera error:', error);
-      // Fallback for web testing or if permission denied
       if (!Capacitor.isNativePlatform()) {
          alert("Camera is primarily for mobile devices. Please use 'Upload Files' on web.");
       }
@@ -146,7 +157,6 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
         };
         reader.readAsDataURL(file);
       });
-      // Reset input to allow re-selection of same file
       e.target.value = '';
     }
   };
@@ -277,7 +287,7 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
                 type="date" 
                 value={formData.dateIssued} 
                 onChange={(e) => setFormData({...formData, dateIssued: e.target.value})}
-                className="w-full p-2.5 border border-gray-300 rounded-md focus:ring-2 focus:ring-yellow-400 outline-none"
+                className="w-full p-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-400 outline-none"
                 required 
               />
             </div>
@@ -329,12 +339,20 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
                   type="button"
                   onClick={handleAiGenerate}
                   disabled={isGenerating}
-                  className="flex items-center space-x-1 text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-md hover:bg-purple-200 transition-colors border border-purple-200"
+                  className="flex items-center space-x-1 text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-md hover:bg-indigo-200 transition-colors border border-indigo-200 disabled:opacity-50"
                 >
-                  <Sparkles size={12} />
-                  <span>{isGenerating ? 'Generating...' : 'AI Suggest'}</span>
+                  <Sparkles size={12} className={isGenerating ? 'animate-pulse' : ''} />
+                  <span>{isGenerating ? 'Generating...' : 'AI Suggest (Search)'}</span>
                 </button>
               </div>
+              
+              {aiError && (
+                <div className="mb-2 p-2 bg-red-50 border border-red-100 rounded-md flex items-start text-[10px] text-red-600">
+                    <AlertCircle size={12} className="mr-1 mt-0.5 shrink-0" />
+                    <span>{aiError}</span>
+                </div>
+              )}
+
               <textarea 
                 id="recommendations"
                 value={formData.recommendations} 
@@ -343,6 +361,24 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
                 placeholder="AI can generate this based on the issue..."
                 required
               />
+
+              {aiSources.length > 0 && (
+                <div className="mt-2 space-y-1">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Sources</p>
+                    {aiSources.map((source, idx) => (
+                        <a 
+                            key={idx} 
+                            href={source.uri} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="flex items-center text-[10px] text-indigo-600 hover:underline"
+                        >
+                            <ExternalLink size={10} className="mr-1" />
+                            {source.title}
+                        </a>
+                    ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -352,9 +388,7 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
             <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-4">Evidence</h3>
             
             <div className="space-y-4">
-                {/* Action Buttons */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* Upload File Button */}
                     <div 
                         onClick={() => fileInputRef.current?.click()}
                         className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center text-gray-400 hover:border-blue-500 hover:text-blue-500 hover:bg-blue-50 transition-all cursor-pointer bg-gray-50 h-32"
@@ -372,7 +406,6 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
                         />
                     </div>
 
-                    {/* Take Photo Button */}
                     <div 
                         onClick={handleTakePhoto}
                         className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center text-gray-400 hover:border-yellow-500 hover:text-yellow-600 hover:bg-yellow-50 transition-all cursor-pointer bg-gray-50 h-32"
@@ -383,7 +416,6 @@ const EnforcementForm: React.FC<EnforcementFormProps> = ({ initialData, onSave, 
                     </div>
                 </div>
 
-                {/* File List */}
                 {formData.attachments && formData.attachments.length > 0 && (
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                         {formData.attachments.map((file, index) => (

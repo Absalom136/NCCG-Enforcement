@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import SearchRecords from './components/SearchRecords';
@@ -14,6 +14,35 @@ const App: React.FC = () => {
   const [editingRecord, setEditingRecord] = useState<EnforcementRecord | null>(null);
   const [viewingRecord, setViewingRecord] = useState<EnforcementRecord | null>(null);
   const [initialSearchFilter, setInitialSearchFilter] = useState<string>('All');
+  const [isAiConnected, setIsAiConnected] = useState(false);
+
+  useEffect(() => {
+    checkAiStatus();
+  }, []);
+
+  const checkAiStatus = async () => {
+    try {
+      if ((window as any).aistudio?.hasSelectedApiKey) {
+        const hasKey = await (window as any).aistudio.hasSelectedApiKey();
+        setIsAiConnected(hasKey);
+      } else if (process.env.API_KEY) {
+        setIsAiConnected(true);
+      }
+    } catch (e) {
+      console.warn("AI Status check failed", e);
+    }
+  };
+
+  const handleConnectAi = async () => {
+    if ((window as any).aistudio?.openSelectKey) {
+      await (window as any).aistudio.openSelectKey();
+      // Per race condition guidelines, assume success after triggering
+      setIsAiConnected(true);
+    } else {
+      alert("AI Key selection is only available in the native mobile environment. Using system key.");
+      checkAiStatus();
+    }
+  };
 
   const handleSaveRecord = (newRecord: EnforcementRecord) => {
     setRecords((prev) => {
@@ -50,7 +79,7 @@ const App: React.FC = () => {
   const handleEditRequest = (record: EnforcementRecord) => {
     setEditingRecord(record);
     setCurrentView(AppView.NEW_ENTRY);
-    setViewingRecord(null); // Close modal if open
+    setViewingRecord(null);
   };
 
   const handleViewRecord = (record: EnforcementRecord) => {
@@ -103,10 +132,14 @@ const App: React.FC = () => {
   };
 
   return (
-    <Layout currentView={currentView} setCurrentView={setCurrentView}>
+    <Layout 
+      currentView={currentView} 
+      setCurrentView={setCurrentView}
+      isAiConnected={isAiConnected}
+      onConnectAi={handleConnectAi}
+    >
       {renderContent()}
       
-      {/* Detail Modal Layer */}
       {viewingRecord && (
         <RecordDetailsModal 
           record={viewingRecord} 
